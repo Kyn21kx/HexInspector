@@ -4,7 +4,7 @@
 #include <cstdint>
 
 namespace TextUtils {
-	constexpr Clay_TextElementConfig Default(uint16_t fontSize, Clay_Color color = ColorUtils::WHITE_()) {
+	Clay_TextElementConfig Default(uint16_t fontSize, Clay_Color color = ColorUtils::WHITE_()) {
 		return {
 			.textColor = color,	
 			.fontId = 0,

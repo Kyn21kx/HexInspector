@@ -11,6 +11,7 @@ enum class EFileFlags : uint8_t {
 
 struct File {
     uintptr_t handle = 0;
+    uintptr_t mapHandle = 0; // This is only set on Windows
     size_t size = 0;
     EFileFlags flags = EFileFlags::None;
 };
@@ -20,12 +21,13 @@ namespace FileLayer {
         Ok = 0,
         FileNotFound,
         CantOpen,
+        FailedToMapFile,
         NotYetImplemented
     };
 
     Result<File, EError> OpenFile(std::string_view path, EFileFlags flags = EFileFlags::None);
 
-    Result<uint8_t*, EError> ReadIntoBuffer(uint8_t* buffer, size_t size, const File& file);
+    Result<uint8_t*, EError> ReadIntoBuffer(uint8_t* buffer, size_t size, File& file);
 
     void CloseFile(File* file);
     

@@ -9,6 +9,7 @@
 #include "components/Buttons.hpp"
 #include "raylib.h"
 #include <cassert>
+#include <string>
 extern "C" {
 #include "renderer/clay_renderer_raylib.h"
 }
@@ -39,20 +40,21 @@ void Application::Init() {
     fonts[0] = LoadFontEx("assets/fonts/Nova_Square/NovaSquare-Regular.ttf", 72, NULL, 0);
     if (fonts[0].texture.id == 0) fonts[0] = GetFontDefault();
 
-    Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
+    Font* userDataPtr = &(fonts[0]);
+    Clay_SetMeasureTextFunction(Raylib_MeasureText, userDataPtr);
     initialized = true;
 }
 
 void Application::Update(float dt) {
-    Clay_SetLayoutDimensions((Clay_Dimensions){
+    Clay_SetLayoutDimensions({
         .width = (float)GetScreenWidth(),
         .height = (float)GetScreenHeight(),
     });
     Clay_SetPointerState(
-        (Clay_Vector2){ .x = (float)GetMouseX(), .y = (float)GetMouseY() },
+        { .x = (float)GetMouseX(), .y = (float)GetMouseY() },
         IsMouseButtonDown(MOUSE_BUTTON_LEFT)
     );
-    Clay_UpdateScrollContainers(true, (Clay_Vector2){ .x = 0, .y = 0 }, dt);
+    Clay_UpdateScrollContainers(true, { .x = 0, .y = 0 }, dt);
     if (IsFileDropped()) {
         FilePathList pathList = LoadDroppedFiles();
 
@@ -86,11 +88,17 @@ void Application::Update(float dt) {
 }
 
 void Application::Draw() {
+    Vector2 windowSize = {(float)GetScreenWidth(), (float)GetScreenHeight()};
+    Clay_SetLayoutDimensions({.width = windowSize.x, .height = windowSize.y});
+
     BeginDrawing();
-    ClearBackground((Color){ 255, 255, 255, 255 });
+
+    ClearBackground({ 255, 255, 255, 255 });
 
     Clay_BeginLayout();
+
     BuildUI();
+
     Clay_RenderCommandArray cmds = Clay_EndLayout();
     Clay_Raylib_Render(cmds, fonts);
 
@@ -98,7 +106,7 @@ void Application::Draw() {
 }
 
 Clay_LayoutConfig GrowingLayout(Clay_LayoutDirection dir, uint16_t gap, uint16_t pad) {
-    return (Clay_LayoutConfig){
+    return {
         .sizing = { .width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW() },
         .padding = { .left = pad, .right = pad, .top = pad, .bottom = pad },
         .childGap = gap,
@@ -128,6 +136,32 @@ void FileDialogOpen(Clay_ElementId elementId, Clay_PointerData pointerData, intp
     std::printf("Open file dialog!\n");
 }
 
+
+Clay_String StrToClayString(const char* data, size_t size) noexcept {
+    return Clay_String{ false, static_cast<int32_t>(size), data};
+}
+
+void DrawByte(size_t idx, uint8_t byte) {
+    Clay_LayoutConfig layout = {
+        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        .childGap = 4,
+    };
+
+    const char hexChars[] = "0123456789ABCDEF";
+    std::string hexRepresentation;
+    hexRepresentation.resize(3);
+    CLAY({
+        .id = CLAY_IDI("Byte", idx),
+        .layout = layout
+    }) {
+        // Transform into hex and draw that
+        hexRepresentation[0] = hexChars[(byte >> 4) & 0x0F];
+        hexRepresentation[1] = hexChars[byte & 0x0F];
+        Clay_String str = StrToClayString(hexRepresentation.c_str(), hexRepresentation.size());
+        CLAY_TEXT(str, CLAY_TEXT_CONFIG(TextUtils::Default(28)));
+    }
+}
+
 void DrawHexView(const AppState& appState) {
   Clay_TextElementConfig panelTitleTextConfig = TextUtils::Default(14);
   CLAY({
@@ -141,19 +175,24 @@ void DrawHexView(const AppState& appState) {
       .backgroundColor = PANEL_COLOR,
       .border = {.color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1)},
   }) {
-    CLAY_TEXT(CLAY_STRING("Hex View"), &panelTitleTextConfig);
+    CLAY_TEXT(CLAY_STRING("Hex View"), CLAY_TEXT_CONFIG(panelTitleTextConfig));
     CLAY({ .id = CLAY_ID("PanelSpace"), .layout = { .sizing = LayoutUtils::SizeAutoGrowXY(), .childAlignment = LayoutUtils::ChildAlignCenterAll()}}) {
         // We have no open file, so we need to prompt the user to open one
         if (appState.currentFile.handle == 0) {
             Buttons::ButtonArgs openFileBtn {};
             // openFileBtn.fgHoverColor = ColorUtils::SUCCESS();
             openFileBtn.fontSize = 24;
-            openFileBtn.onHover = &::FileDialogOpen;
+            // openFileBtn.onHover = &::FileDialogOpen;
             Buttons::RawButton(CLAY_STRING("Open a file to start!"), openFileBtn);
-            return;
+        }
+        else {
+            // Draw the contents of the file
+            for (size_t i = 0; i < appState.currentFile.size; i++) {
+                uint8_t b = *(appState.binaryContentBuffer + i);
+                DrawByte(i, b);
+            }
         }
 
-        // Draw the contents of the file
         
     }
   }
@@ -179,7 +218,7 @@ void DrawInterpretedView(const AppState& appState) {
 }
 
 void Application::BuildUI() {
-    constexpr Clay_TextElementConfig titleConfig = TextUtils::Default(24);
+    Clay_TextElementConfig titleConfig = TextUtils::Default(24);
     CLAY({
         .id = CLAY_ID("Root"),
         .layout = GrowingLayout(CLAY_TOP_TO_BOTTOM, 4, 4)

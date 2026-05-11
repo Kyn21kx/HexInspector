@@ -7,9 +7,9 @@ public:
     Result() {
         
     }
+    
     Result(T&& value) {
-        T* ptr = reinterpret_cast<T*>(&this->m_value);
-        *ptr = value;
+        this->m_value = value;
         this->m_hasValue = true;
     }
 
@@ -23,13 +23,12 @@ public:
     }
 
     const T& Val() const {
-        const T* val = reinterpret_cast<const T*>(&this->m_value);
-        return *val;
+        return this->m_value;
     }
     
 
 private:
-    std::aligned_storage<sizeof(T), alignof(T)> m_value{};
+    T m_value{};
     E m_error{};
     bool m_hasValue = false;
 };

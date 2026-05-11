@@ -3,68 +3,36 @@ const zcc = @import("compile_commands");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
 
-    const exe_mod = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-        .link_libcpp = true,
-    });
+    const exe = b.addExecutable(.{ .name = "HexInspector", .target = target });
 
-    exe_mod.addCSourceFiles(.{
-        .files = &.{ "main.cpp", "Application.cpp", "FileLayer.cpp" },
-        .flags = &.{ "-std=c++20", "-Wno-reorder", "-g" },
-        .language = .cpp,
-        .root = b.path("src/"),
-    });
+    var targets = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
+    targets.append(exe) catch @panic("OOM");
 
-    exe_mod.addIncludePath(b.path("third_party/clay/include/"));
-    exe_mod.addIncludePath(b.path("third_party/raylib/include/"));
-    exe_mod.addLibraryPath(b.path("third_party/raylib/lib"));
+    // Use clay as a library so its behavior is self contained
+    const clayLibRendering = b.addStaticLibrary(.{ .name = "clay", .target = target });
+    clayLibRendering.addCSourceFile(.{ .file = b.path("src/renderer/clay_renderer_raylib.c"), .flags = &[_][]const u8{ "-std=c99", "-DCLAY_IMPLEMENTATION", "-g" }, .language = .c });
+    clayLibRendering.addIncludePath(b.path("third_party/clay/include/"));
+    clayLibRendering.addIncludePath(b.path("third_party/raylib/include/"));
+    clayLibRendering.linkSystemLibrary("c");
 
-    exe_mod.linkSystemLibrary("raylib", .{});
+    const compileFlags = &[_][]const u8{ "-std=c++20", "-Wno-reorder", "-g" };
+    const sources = &[_][]const u8{ "main.cpp", "Application.cpp", "FileLayer.cpp" };
+    exe.addCSourceFiles(.{ .files = sources, .flags = compileFlags, .language = .cpp, .root = b.path("src/") });
 
-    const clay_mod = b.createModule(.{
-        .target = target,
-        .link_libc = true,
-    });
+    _ = zcc.createStep(b, "cdb", targets.toOwnedSlice() catch @panic("OOM"));
 
-    clay_mod.addCSourceFile(.{
-        .file = b.path("src/renderer/clay_renderer_raylib.c"),
-        .flags = &.{ "-std=c99", "-DCLAY_IMPLEMENTATION", "-g" },
-        .language = .c,
-    });
-    clay_mod.addIncludePath(b.path("third_party/clay/include/"));
-    clay_mod.addIncludePath(b.path("third_party/raylib/include/"));
+    exe.addIncludePath(b.path("third_party/clay/include/"));
+    exe.addIncludePath(b.path("third_party/raylib/include/"));
 
-    const clay_lib = b.addLibrary(.{
-        .name = "clay",
-        .root_module = clay_mod,
-        .linkage = .static,
-    });
-
-    exe_mod.linkLibrary(clay_lib);
-
-    const exe = b.addExecutable(.{
-        .name = "HexViewer",
-        .root_module = exe_mod,
-    });
-
-    if (target.result.os.tag == .macos) {
-        exe_mod.linkFramework("Cocoa", .{});
-        exe_mod.linkFramework("IOKit", .{});
-        exe_mod.linkFramework("CoreVideo", .{});
-    }
-
-    if (target.result.os.tag == .windows) {
-        exe_mod.linkSystemLibrary("gdi32", .{});
-        exe_mod.linkSystemLibrary("user32", .{});
-        exe_mod.linkSystemLibrary("shell32", .{});
-    }
-
-    const compile_steps = b.allocator.dupe(*std.Build.Step.Compile, &.{ clay_lib, exe }) catch @panic("OOM");
-    _ = zcc.createStep(b, "cdb", compile_steps);
+    exe.linkLibrary(clayLibRendering);
+    exe.linkSystemLibrary("raylib");
+    exe.linkSystemLibrary("gdi32");
+    exe.linkSystemLibrary("user32");
+    exe.linkSystemLibrary("shell32");
+    exe.addLibraryPath(b.path("third_party/raylib/lib"));
+    exe.linkLibCpp();
+    exe.linkSystemLibrary("c");
 
     b.installArtifact(exe);
 }
