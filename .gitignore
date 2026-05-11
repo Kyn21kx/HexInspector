@@ -1,0 +1,14 @@
+# Zig
+.zig-cache/
+zig-out/
+zig-pkg/
+*.o
+
+# Generated
+compile_commands.json
+
+# macOS
+.DS_Store
+
+# Editor / tool caches
+.cache/
