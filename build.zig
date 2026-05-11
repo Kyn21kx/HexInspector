@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) void {
 
     clay_mod.addCSourceFile(.{
         .file = b.path("src/renderer/clay_renderer_raylib.c"),
-        .flags = &.{ "-std=c99", "-DCLAY_IMPLEMENTATION" },
+        .flags = &.{ "-std=c99", "-DCLAY_IMPLEMENTATION", "-g" },
         .language = .c,
     });
     clay_mod.addIncludePath(b.path("third_party/clay/include/"));
@@ -64,7 +64,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const compile_steps = b.allocator.dupe(*std.Build.Step.Compile, &.{ clay_lib, exe }) catch @panic("OOM");
-    zcc.createStep(b, "cdb", compile_steps);
+    _ = zcc.createStep(b, "cdb", compile_steps);
 
     b.installArtifact(exe);
 }
