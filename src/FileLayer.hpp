@@ -9,10 +9,14 @@ enum class EFileFlags : uint8_t {
     MemoryMapped = 1
 };
 
+constexpr size_t MAX_FILE_NAME_LENGTH = 128;
+
 struct File {
     uintptr_t handle = 0;
     uintptr_t mapHandle = 0; // This is only set on Windows
     size_t size = 0;
+    char name[MAX_FILE_NAME_LENGTH] = {0};
+    size_t nameLength;
     EFileFlags flags = EFileFlags::None;
 };
 

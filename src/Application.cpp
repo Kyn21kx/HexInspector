@@ -4,6 +4,7 @@
 #include "ColorUtils.hpp"
 #include "FileLayer.hpp"
 #include "LayoutUtils.hpp"
+#include "MemoryArena.hpp"
 #include "Result.hpp"
 #include "TextUtils.hpp"
 #include "components/Buttons.hpp"
@@ -20,6 +21,9 @@ extern "C" {
 constexpr Clay_Color PANEL_COLOR = ColorUtils::PANEL_BG();
 constexpr Clay_Color BACKGROUND_COLOR = ColorUtils::BORDER();
 
+constexpr size_t SMALL_STR_ARENA_SIZE = 1024 * 4;
+MemoryArena smallStringArena;
+
 void Application::Run() {
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
@@ -31,6 +35,7 @@ void Application::Run() {
 void Application::Init() {
     uint32_t memorySize = Clay_MinMemorySize();
     void* memory = std::malloc(memorySize);
+    smallStringArena.Init(SMALL_STR_ARENA_SIZE);
 
     this->m_arena = Clay_CreateArenaWithCapacityAndMemory(memorySize, memory);
     Clay_Initialize(this->m_arena, { .width = 1280, .height = 800}, {});
@@ -46,6 +51,7 @@ void Application::Init() {
 }
 
 void Application::Update(float dt) {
+    smallStringArena.Clear();
     Clay_SetLayoutDimensions({
         .width = (float)GetScreenWidth(),
         .height = (float)GetScreenHeight(),
@@ -105,6 +111,11 @@ void Application::Draw() {
     EndDrawing();
 }
 
+
+Clay_String StrToClayString(const char* data, size_t size) noexcept {
+    return Clay_String{ false, static_cast<int32_t>(size), data};
+}
+
 Clay_LayoutConfig GrowingLayout(Clay_LayoutDirection dir, uint16_t gap, uint16_t pad) {
     return {
         .sizing = { .width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW() },
@@ -114,7 +125,7 @@ Clay_LayoutConfig GrowingLayout(Clay_LayoutDirection dir, uint16_t gap, uint16_t
     };
 }
 
-void DrawHeader() {
+void DrawHeader(const AppState& appState) {
     CLAY({
         .id = CLAY_ID("HeaderBar"),
         .layout = {
@@ -124,8 +135,9 @@ void DrawHeader() {
         .backgroundColor = PANEL_COLOR,
         .border = { .color = ColorUtils::BLACK_(), .width = { 0, 0, 1, 0, 0 } },
     }) {
-        CLAY_TEXT(CLAY_STRING("HexViewer"),
-            CLAY_TEXT_CONFIG({ .fontSize = 16, .textColor = ColorUtils::WHITE_() }));
+        Clay_String title = appState.currentFile.handle == 0 ? CLAY_STRING("HexViewer") : StrToClayString(appState.currentFile.name, appState.currentFile.nameLength);
+        CLAY_TEXT(title,
+            CLAY_TEXT_CONFIG({ .fontSize = 24, .textColor = ColorUtils::WHITE_() }));
     }
 }
 
@@ -137,9 +149,6 @@ void FileDialogOpen(Clay_ElementId elementId, Clay_PointerData pointerData, intp
 }
 
 
-Clay_String StrToClayString(const char* data, size_t size) noexcept {
-    return Clay_String{ false, static_cast<int32_t>(size), data};
-}
 
 void DrawByte(size_t idx, uint8_t byte) {
     Clay_LayoutConfig layout = {
@@ -148,8 +157,7 @@ void DrawByte(size_t idx, uint8_t byte) {
     };
 
     const char hexChars[] = "0123456789ABCDEF";
-    std::string hexRepresentation;
-    hexRepresentation.resize(3);
+    char* hexRepresentation = smallStringArena.PushManyAndZeroOut<char>(3);
     CLAY({
         .id = CLAY_IDI("Byte", idx),
         .layout = layout
@@ -157,8 +165,15 @@ void DrawByte(size_t idx, uint8_t byte) {
         // Transform into hex and draw that
         hexRepresentation[0] = hexChars[(byte >> 4) & 0x0F];
         hexRepresentation[1] = hexChars[byte & 0x0F];
-        Clay_String str = StrToClayString(hexRepresentation.c_str(), hexRepresentation.size());
-        CLAY_TEXT(str, CLAY_TEXT_CONFIG(TextUtils::Default(28)));
+        Clay_String str = StrToClayString(hexRepresentation, 3);
+        Buttons::ButtonArgs button;
+        button.fgHoverColor = ColorUtils::ACCENT_PURPLE();
+        button.fontSize = 24;
+        button.sizing = {
+            .height = CLAY_SIZING_FIXED(48),
+            .width = CLAY_SIZING_FIXED(48)
+        };
+        Buttons::RawButton(str, button);
     }
 }
 
@@ -167,33 +182,33 @@ void DrawHexView(const AppState& appState) {
   CLAY({
       .id = CLAY_ID("LeftPanel"),
       .layout =
-          {
-              .padding = {.left = 8, .right = 8, .top = 8, .bottom = 8},
-              .sizing = {.width = CLAY_SIZING_GROW(),
-                         .height = CLAY_SIZING_GROW()},
-          },
+        {
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .padding = {.left = 8, .right = 8, .top = 8, .bottom = 8},
+            .sizing = {.width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW()},
+        },
       .backgroundColor = PANEL_COLOR,
       .border = {.color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1)},
   }) {
     CLAY_TEXT(CLAY_STRING("Hex View"), CLAY_TEXT_CONFIG(panelTitleTextConfig));
-    CLAY({ .id = CLAY_ID("PanelSpace"), .layout = { .sizing = LayoutUtils::SizeAutoGrowXY(), .childAlignment = LayoutUtils::ChildAlignCenterAll()}}) {
-        // We have no open file, so we need to prompt the user to open one
-        if (appState.currentFile.handle == 0) {
+    if (appState.currentFile.handle == 0) {
+        CLAY({ .id = CLAY_ID("PanelSpace"), .layout = { .sizing = LayoutUtils::SizeAutoGrowXY(), .childAlignment = LayoutUtils::ChildAlignCenterAll()}}) {
+            // We have no open file, so we need to prompt the user to open one
             Buttons::ButtonArgs openFileBtn {};
             // openFileBtn.fgHoverColor = ColorUtils::SUCCESS();
             openFileBtn.fontSize = 24;
             // openFileBtn.onHover = &::FileDialogOpen;
             Buttons::RawButton(CLAY_STRING("Open a file to start!"), openFileBtn);
         }
-        else {
+    }
+    else {
+        CLAY({ .id = CLAY_ID("PanelSpace"), .layout = { .sizing = LayoutUtils::SizeAutoGrowX({}), .padding = { .top = 4, .left = 4, .bottom = 4, .right = 4 }}}) {
             // Draw the contents of the file
             for (size_t i = 0; i < appState.currentFile.size; i++) {
                 uint8_t b = *(appState.binaryContentBuffer + i);
                 DrawByte(i, b);
             }
         }
-
-        
     }
   }
 }
@@ -213,7 +228,7 @@ void DrawInterpretedView(const AppState& appState) {
         .border = { .color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1) },
     }) {
         CLAY_TEXT(CLAY_STRING("Interpreted View"),
-            CLAY_TEXT_CONFIG({ .fontSize = 14, .textColor = ColorUtils::WHITE_() }));
+            CLAY_TEXT_CONFIG({ .fontSize = 24, .textColor = ColorUtils::WHITE_() }));
     }
 }
 
@@ -223,7 +238,7 @@ void Application::BuildUI() {
         .id = CLAY_ID("Root"),
         .layout = GrowingLayout(CLAY_TOP_TO_BOTTOM, 4, 4)
     }) {
-        DrawHeader();
+        DrawHeader(this->m_appState);
         CLAY({
             .id = CLAY_ID("MainArea"),
             .layout = {

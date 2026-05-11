@@ -50,6 +50,54 @@ constexpr Clay_Color TRANSPARENT(float a = 255) {
     return Clay_Color{ .r = 0, .g = 0, .b = 0, .a = a };
 }
 
+// Neutrals (foundation)
+constexpr Clay_Color PURE_WHITE(float a = 255) { return FromHex(0xffffff, a); }
+constexpr Clay_Color OFF_WHITE(float a = 255) { return FromHex(0xf5f5f5, a); }
+constexpr Clay_Color PURE_BLACK(float a = 255) { return FromHex(0x000000, a); }
+constexpr Clay_Color SOFT_BLACK(float a = 255) { return FromHex(0x1a1a1a, a); }
+
+// Grays (layering)
+constexpr Clay_Color SLATE_50(float a = 255) { return FromHex(0xf8fafc, a); }
+constexpr Clay_Color SLATE_200(float a = 255) { return FromHex(0xe2e8f0, a); }
+constexpr Clay_Color SLATE_400(float a = 255) { return FromHex(0x94a3b8, a); }
+constexpr Clay_Color SLATE_600(float a = 255) { return FromHex(0x475569, a); }
+constexpr Clay_Color SLATE_800(float a = 255) { return FromHex(0x1e293b, a); }
+
+// Primary actions (confident)
+constexpr Clay_Color ACTION_BLUE(float a = 255) { return FromHex(0x3b82f6, a); }
+constexpr Clay_Color DEEP_ACTION_BLUE(float a = 255) { return FromHex(0x2563eb, a); }
+constexpr Clay_Color SUBTLE_BLUE(float a = 255) { return FromHex(0xdbeafe, a); }
+
+// Success (affirmative)
+constexpr Clay_Color SUCCESS_GREEN(float a = 255) { return FromHex(0x22c55e, a); }
+constexpr Clay_Color DEEP_SUCCESS_GREEN(float a = 255) { return FromHex(0x16a34a, a); }
+constexpr Clay_Color SUBTLE_GREEN(float a = 255) { return FromHex(0xdcfce7, a); }
+
+// Warnings (cautionary)
+constexpr Clay_Color WARNING_YELLOW(float a = 255) { return FromHex(0xfbbf24, a); }
+constexpr Clay_Color DEEP_WARNING_YELLOW(float a = 255) { return FromHex(0xd97706, a); }
+constexpr Clay_Color SUBTLE_YELLOW(float a = 255) { return FromHex(0xfef3c7, a); }
+
+// Errors (urgent)
+constexpr Clay_Color ERROR_RED(float a = 255) { return FromHex(0xef4444, a); }
+constexpr Clay_Color DEEP_ERROR_RED(float a = 255) { return FromHex(0xdc2626, a); }
+constexpr Clay_Color SUBTLE_RED(float a = 255) { return FromHex(0xfee2e2, a); }
+
+// Info (helpful)
+constexpr Clay_Color INFO_SKY(float a = 255) { return FromHex(0x0ea5e9, a); }
+constexpr Clay_Color SUBTLE_INFO(float a = 255) { return FromHex(0xe0f2fe, a); }
+
+// Accent (attention-grabbing)
+constexpr Clay_Color ACCENT_PURPLE(float a = 255) { return FromHex(0xa855f7, a); }
+constexpr Clay_Color ACCENT_PINK(float a = 255) { return FromHex(0xec4899, a); }
+constexpr Clay_Color ACCENT_ORANGE(float a = 255) { return FromHex(0xf97316, a); }
+constexpr Clay_Color ACCENT_TEAL(float a = 255) { return FromHex(0x14b8a6, a); }
+
+// Dimmed / low emphasis
+constexpr Clay_Color MUTED_GRAY(float a = 255) { return FromHex(0x9ca3af, a); }
+constexpr Clay_Color DUSTY_WHITE(float a = 255) { return FromHex(0xf3f4f6, a); }
+constexpr Clay_Color SMOKY_BLACK(float a = 255) { return FromHex(0x111827, a); }
+
 constexpr Clay_Color LIGHT_GRAY(float opacity = 255.0f) {
     return { 194, 194, 194, opacity };
 }

@@ -13,6 +13,7 @@ namespace Buttons {
 		bool active = false;
 		OnClickFunc_t onHover = {};
 		intptr_t callbackArgs = 0;
+		Clay_Sizing sizing = {};
 		Clay_Color bgIdleColor = ColorUtils::TRANSPARENT();
 		Clay_Color bgHoverColor = ColorUtils::TRANSPARENT();
 		Clay_Color fgIdleColor = ColorUtils::LIGHT_GRAY();
@@ -21,7 +22,7 @@ namespace Buttons {
 	};
 	
 	inline void RawButton(Clay_String buttonText, const ButtonArgs& args) {
-		CLAY({ .layout = { .padding = CLAY_PADDING_ALL(8) }, .backgroundColor = Clay_Hovered() || args.active ?  args.bgIdleColor : args.bgHoverColor}) {
+		CLAY({ .layout = { .sizing = args.sizing, .padding = CLAY_PADDING_ALL(8) }, .backgroundColor = Clay_Hovered() || args.active ?  args.bgHoverColor : args.bgIdleColor}) {
 	        CLAY_TEXT(buttonText, CLAY_TEXT_CONFIG(TextUtils::Default(args.fontSize, Clay_Hovered() || args.active ? args.fgHoverColor : args.fgIdleColor)));
 	        Clay_OnHover(args.onHover, args.callbackArgs);
 	    }

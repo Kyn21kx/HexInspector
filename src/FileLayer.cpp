@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 
 
@@ -46,6 +47,9 @@ Result<File, FileLayer::EError> FileLayer::OpenFile(std::string_view path, EFile
     };
 
     res.size = std::filesystem::file_size(path);
+    std::string fn = std::filesystem::path(path).filename().string();
+    std::memcpy(res.name, fn.data(), fn.size());
+    res.nameLength = fn.size();
 
     if (((uint8_t)flags & (uint8_t)EFileFlags::MemoryMapped) != 0) {
         if (MemoryMapOpen(&res, path)) return res;
