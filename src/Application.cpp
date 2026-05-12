@@ -168,6 +168,7 @@ void DrawByte(size_t idx, uint8_t byte) {
         Clay_String str = StrToClayString(hexRepresentation, 3);
         Buttons::ButtonArgs button;
         button.fgHoverColor = ColorUtils::ACCENT_PURPLE();
+        button.bgHoverColor = ColorUtils::SOFT_BLACK();
         button.fontSize = 24;
         button.sizing = {
             .height = CLAY_SIZING_FIXED(48),
@@ -178,7 +179,7 @@ void DrawByte(size_t idx, uint8_t byte) {
 }
 
 void DrawHexView(const AppState& appState) {
-  Clay_TextElementConfig panelTitleTextConfig = TextUtils::Default(14);
+  Clay_TextElementConfig panelTitleTextConfig = TextUtils::Default(24);
   CLAY({
       .id = CLAY_ID("LeftPanel"),
       .layout =
@@ -221,6 +222,7 @@ void DrawInterpretedView(const AppState& appState) {
     CLAY({
         .id = CLAY_ID("RightPanel"),
         .layout = {
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .padding = { .left = 8, .right = 8, .top = 8, .bottom = 8 },
             .sizing = { .width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW() },
         },
@@ -229,6 +231,31 @@ void DrawInterpretedView(const AppState& appState) {
     }) {
         CLAY_TEXT(CLAY_STRING("Interpreted View"),
             CLAY_TEXT_CONFIG({ .fontSize = 24, .textColor = ColorUtils::WHITE_() }));
+
+        
+        CLAY({ .id = CLAY_ID("InterpretedPanelSpace"), .layout = { .sizing = LayoutUtils::SizeAutoGrowX({}), .padding = { .top = 4, .left = 4, .bottom = 4, .right = 4 }}}) {
+            Clay_LayoutConfig layout = {
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                .childGap = 4,
+            };
+            // Draw the contents of the file
+            char* data = (char*)appState.binaryContentBuffer;
+            for (size_t i = 0; i < appState.currentFile.size; i++) {
+                CLAY({ .id = CLAY_IDI("Interpreted", i), .layout = layout }) {
+                    Buttons::ButtonArgs button;
+                    button.fgHoverColor = ColorUtils::ACCENT_PURPLE();
+                    button.bgHoverColor = ColorUtils::SOFT_BLACK();
+                    button.fontSize = 24;
+                    button.sizing = {
+                        .height = CLAY_SIZING_FIXED(48),
+                        .width = CLAY_SIZING_FIXED(48)
+                    };
+                    Buttons::RawButton(StrToClayString(data + i, 1), button);
+                }
+
+            }
+        }
+
     }
 }
 
