@@ -178,15 +178,46 @@ void DrawByte(size_t idx, uint8_t byte) {
     }
 }
 
+void DrawBytesLineByLine(const AppState& appState) {
+    Clay_ElementData panelData = Clay_GetElementData(CLAY_ID("LeftPanel"));
+    float availableWidth = panelData.boundingBox.width;
+    constexpr float BUTTON_WIDTH = 48;
+
+    // Calculate how many buttons per line
+    int32_t buttonsPerWidth = static_cast<int32_t>(availableWidth / BUTTON_WIDTH);
+
+    size_t buttonsToWrite = appState.currentFile.size;
+
+    // 10.4 btns per width
+    int32_t buttonsPerLine = buttonsToWrite / buttonsPerWidth;
+
+
+    CLAY({ .id = CLAY_ID("ByteRows"), .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = { .width = CLAY_SIZING_PERCENT(1) }}}) {
+        // Then the for loop iterates through the buttons per line
+        for (int32_t i = 0; i < buttonsToWrite; i += buttonsPerLine) {
+            CLAY({ .id = CLAY_ID("PanelSpace"), .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(1) }, .padding = { .top = 4, .left = 4, .bottom = 4, .right = 4 }}}) {
+                // Draw the contents of the file
+                for (size_t j = i; j < buttonsPerLine; j++) {
+                    uint8_t b = *(appState.binaryContentBuffer + j);
+                    DrawByte(j, b);
+                }
+            }
+        }
+        // TODO: Draw the remaining ones
+    }
+
+}
+
 void DrawHexView(const AppState& appState) {
   Clay_TextElementConfig panelTitleTextConfig = TextUtils::Default(24);
+  float percentageUse = appState.currentFile.handle == 0 ? 1 : 0.5;
   CLAY({
       .id = CLAY_ID("LeftPanel"),
       .layout =
         {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .padding = {.left = 8, .right = 8, .top = 8, .bottom = 8},
-            .sizing = {.width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW()},
+            .sizing = {.width = CLAY_SIZING_PERCENT(percentageUse), .height = CLAY_SIZING_GROW()},
         },
       .backgroundColor = PANEL_COLOR,
       .border = {.color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1)},
@@ -203,13 +234,7 @@ void DrawHexView(const AppState& appState) {
         }
     }
     else {
-        CLAY({ .id = CLAY_ID("PanelSpace"), .layout = { .sizing = LayoutUtils::SizeAutoGrowX({}), .padding = { .top = 4, .left = 4, .bottom = 4, .right = 4 }}}) {
-            // Draw the contents of the file
-            for (size_t i = 0; i < appState.currentFile.size; i++) {
-                uint8_t b = *(appState.binaryContentBuffer + i);
-                DrawByte(i, b);
-            }
-        }
+        DrawBytesLineByLine(appState);
     }
   }
 }
@@ -224,7 +249,7 @@ void DrawInterpretedView(const AppState& appState) {
         .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .padding = { .left = 8, .right = 8, .top = 8, .bottom = 8 },
-            .sizing = { .width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW() },
+            .sizing = { .width = CLAY_SIZING_PERCENT(0.5), .height = CLAY_SIZING_GROW()},
         },
         .backgroundColor = PANEL_COLOR,
         .border = { .color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1) },
