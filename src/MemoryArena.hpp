@@ -47,6 +47,21 @@ public:
 		uint8_t* res = &this->m_memory[this->m_position];
 		// TODO: optionally do memset to zero
 		std::memset(res, 0, size);
+		printf("Arena pos: %zu\n", positionAligned + size);
+		return res;
+	}
+
+	uint8_t* PushAndZeroOutNonAligned(size_t size) {
+		assert(this->m_memory != nullptr && "Uninitialized memory, call init() with the arena size to allocate memory first");
+		this->m_position = this->m_position + size;
+		// ERR_FAIL_COND_V(this->m_position > this->m_capacity, nullptr);
+		if (this->m_position > this->m_capacity) {
+			// ERR_PRINT("Arena allocation request size exceeded defined arena buffer size!");
+			abort();
+		}
+		uint8_t* res = &this->m_memory[this->m_position];
+		// TODO: optionally do memset to zero
+		std::memset(res, 0, size);
 		return res;
 	}
 	
@@ -68,6 +83,11 @@ public:
 	template<class T>
 	T* PushManyAndZeroOut(size_t count) {
 		return reinterpret_cast<T*>(this->PushAndZeroOut(sizeof(T) * count));
+	}
+
+	template<class T>
+	T* PushManyAndZeroOutNonAligned(size_t count) {
+		return reinterpret_cast<T*>(this->PushAndZeroOutNonAligned(sizeof(T) * count));
 	}
 
 	template<class T>

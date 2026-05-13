@@ -8,5 +8,6 @@ struct AppState {
     File currentFile;
     // TODO: an error queue
     uint8_t* binaryContentBuffer; // This is either a mmap'd address or given by the memory arena
+    size_t hoverByteIdx = 0;
 };
 

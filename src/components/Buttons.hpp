@@ -6,7 +6,7 @@
 
 namespace Buttons {
 	
-	using OnClickFunc_t = void(*)(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+using OnClickFunc_t = void(*)(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
 	
 	struct ButtonArgs {
 		uint16_t fontSize = 24;
@@ -21,12 +21,14 @@ namespace Buttons {
 		
 	};
 	
-	inline void RawButton(Clay_String buttonText, const ButtonArgs& args) {
-		CLAY({ .layout = { .sizing = args.sizing, .padding = CLAY_PADDING_ALL(8) }, .backgroundColor = Clay_Hovered() || args.active ?  args.bgHoverColor : args.bgIdleColor}) {
+	inline bool RawButton(Clay_String buttonText, const ButtonArgs& args) {
+		// Variable for horrible ternary operator trick
+		bool wasHovered = false;
+		CLAY({ .layout = { .sizing = args.sizing, .padding = CLAY_PADDING_ALL(8) }, .backgroundColor = Clay_Hovered() || args.active ?  (wasHovered = true, args.bgHoverColor) : args.bgIdleColor}) {
 	        CLAY_TEXT(buttonText, CLAY_TEXT_CONFIG(TextUtils::Default(args.fontSize, Clay_Hovered() || args.active ? args.fgHoverColor : args.fgIdleColor)));
 	        Clay_OnHover(args.onHover, args.callbackArgs);
 	    }
-		
+	  return wasHovered;
 	}
 	
 	inline void HeaderButton(Clay_String buttonText, const ButtonArgs& args = {}) {

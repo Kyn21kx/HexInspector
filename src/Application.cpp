@@ -10,6 +10,7 @@
 #include "components/Buttons.hpp"
 #include "raylib.h"
 #include <cassert>
+#include <cstdint>
 #include <string>
 extern "C" {
 #include "renderer/clay_renderer_raylib.h"
@@ -21,7 +22,7 @@ extern "C" {
 constexpr Clay_Color PANEL_COLOR = ColorUtils::PANEL_BG();
 constexpr Clay_Color BACKGROUND_COLOR = ColorUtils::BORDER();
 
-constexpr size_t SMALL_STR_ARENA_SIZE = 1024 * 4;
+constexpr size_t SMALL_STR_ARENA_SIZE = 1024 * 10;
 MemoryArena smallStringArena;
 
 void Application::Run() {
@@ -47,6 +48,7 @@ void Application::Init() {
 
     Font* userDataPtr = &(fonts[0]);
     Clay_SetMeasureTextFunction(Raylib_MeasureText, userDataPtr);
+    // Clay_SetDebugModeEnabled(true);
     initialized = true;
 }
 
@@ -149,15 +151,14 @@ void FileDialogOpen(Clay_ElementId elementId, Clay_PointerData pointerData, intp
 }
 
 
-
-void DrawByte(size_t idx, uint8_t byte) {
+void DrawByte(size_t idx, uint8_t byte, const AppState& state) {
     Clay_LayoutConfig layout = {
         .layoutDirection = CLAY_LEFT_TO_RIGHT,
         .childGap = 4,
     };
 
     const char hexChars[] = "0123456789ABCDEF";
-    char* hexRepresentation = smallStringArena.PushManyAndZeroOut<char>(3);
+    char* hexRepresentation = smallStringArena.PushManyAndZeroOutNonAligned<char>(3);
     CLAY({
         .id = CLAY_IDI("Byte", idx),
         .layout = layout
@@ -174,7 +175,10 @@ void DrawByte(size_t idx, uint8_t byte) {
             .height = CLAY_SIZING_FIXED(48),
             .width = CLAY_SIZING_FIXED(48)
         };
-        Buttons::RawButton(str, button);
+        if (Buttons::RawButton(str, button)) {
+            auto* stateMut = const_cast<AppState*>(&state);
+            stateMut->hoverByteIdx = idx;
+        }
     }
 }
 
@@ -188,18 +192,17 @@ void DrawBytesLineByLine(const AppState& appState) {
 
     size_t buttonsToWrite = appState.currentFile.size;
 
-    // 10.4 btns per width
-    int32_t buttonsPerLine = buttonsToWrite / buttonsPerWidth;
+    int32_t additionalLinesToWrite = ceil(buttonsToWrite / (float)buttonsPerWidth);
 
-
-    CLAY({ .id = CLAY_ID("ByteRows"), .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = { .width = CLAY_SIZING_PERCENT(1) }}}) {
+    CLAY({ .id = CLAY_ID("ByteRows"), .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM }}) {
         // Then the for loop iterates through the buttons per line
-        for (int32_t i = 0; i < buttonsToWrite; i += buttonsPerLine) {
-            CLAY({ .id = CLAY_ID("PanelSpace"), .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(1) }, .padding = { .top = 4, .left = 4, .bottom = 4, .right = 4 }}}) {
+        for (int32_t i = 0; i < additionalLinesToWrite; i ++) {
+            CLAY({ .id = CLAY_IDI("PanelSpace", i), .layout = { .sizing = { .width = CLAY_SIZING_FIT() }, .padding = { .top = 0, .left = 4, .bottom = 0, .right = 4 }}}) {
                 // Draw the contents of the file
-                for (size_t j = i; j < buttonsPerLine; j++) {
+                size_t offset = (buttonsPerWidth * i);
+                for (size_t j = offset; j < (offset + buttonsPerWidth)  && j < buttonsToWrite; j++) {
                     uint8_t b = *(appState.binaryContentBuffer + j);
-                    DrawByte(j, b);
+                    DrawByte(j, b, appState);
                 }
             }
         }
@@ -207,6 +210,47 @@ void DrawBytesLineByLine(const AppState& appState) {
     }
 
 }
+
+
+void DrawCharsLineByLine(const AppState& appState) {
+    Clay_ElementData panelData = Clay_GetElementData(CLAY_ID("LeftPanel"));
+    float availableWidth = panelData.boundingBox.width;
+    constexpr float BUTTON_WIDTH = 48;
+
+    // Calculate how many buttons per line
+    int32_t buttonsPerWidth = static_cast<int32_t>(availableWidth / BUTTON_WIDTH);
+
+    size_t buttonsToWrite = appState.currentFile.size;
+
+    int32_t additionalLinesToWrite = ceil(buttonsToWrite / (float)buttonsPerWidth);
+
+    char* data = (char*)appState.binaryContentBuffer;
+
+    CLAY({ .id = CLAY_ID("InterpretRows"), .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM }}) {
+        // Then the for loop iterates through the buttons per line
+        for (int32_t i = 0; i < additionalLinesToWrite; i ++) {
+            CLAY({ .id = CLAY_IDI("IPanelSpace", i), .layout = { .sizing = { .width = CLAY_SIZING_FIT() }, .padding = { .top = 0, .left = 4, .bottom = 0, .right = 4 }}}) {
+                // Draw the contents of the file
+                size_t offset = (buttonsPerWidth * i);
+                for (size_t j = offset; j < (offset + buttonsPerWidth)  && j < buttonsToWrite; j++) {
+                    Buttons::ButtonArgs button;
+                    button.fgHoverColor = ColorUtils::ACCENT_PURPLE();
+                    button.bgHoverColor = ColorUtils::SOFT_BLACK();
+                    button.active = appState.hoverByteIdx == j;
+                    button.fontSize = 24;
+                    button.sizing = {
+                        .height = CLAY_SIZING_FIXED(48),
+                        .width = CLAY_SIZING_FIXED(48)
+                    };
+                    Buttons::RawButton(StrToClayString(data + j, 1), button);
+                }
+            }
+        }
+        // TODO: Draw the remaining ones
+    }
+
+}
+
 
 void DrawHexView(const AppState& appState) {
   Clay_TextElementConfig panelTitleTextConfig = TextUtils::Default(24);
@@ -217,7 +261,7 @@ void DrawHexView(const AppState& appState) {
         {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .padding = {.left = 8, .right = 8, .top = 8, .bottom = 8},
-            .sizing = {.width = CLAY_SIZING_PERCENT(percentageUse), .height = CLAY_SIZING_GROW()},
+            .sizing = {.width = CLAY_SIZING_FIXED(GetScreenWidth() * percentageUse), .height = CLAY_SIZING_GROW()},
         },
       .backgroundColor = PANEL_COLOR,
       .border = {.color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1)},
@@ -248,8 +292,8 @@ void DrawInterpretedView(const AppState& appState) {
         .id = CLAY_ID("RightPanel"),
         .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            .padding = { .left = 8, .right = 8, .top = 8, .bottom = 8 },
-            .sizing = { .width = CLAY_SIZING_PERCENT(0.5), .height = CLAY_SIZING_GROW()},
+            // .padding = { .left = 8, .right = 8, .top = 8, .bottom = 8 },
+            .sizing = { .width = CLAY_SIZING_FIXED(GetScreenWidth() * 0.5f), .height = CLAY_SIZING_GROW()},
         },
         .backgroundColor = PANEL_COLOR,
         .border = { .color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1) },
@@ -258,27 +302,13 @@ void DrawInterpretedView(const AppState& appState) {
             CLAY_TEXT_CONFIG({ .fontSize = 24, .textColor = ColorUtils::WHITE_() }));
 
         
-        CLAY({ .id = CLAY_ID("InterpretedPanelSpace"), .layout = { .sizing = LayoutUtils::SizeAutoGrowX({}), .padding = { .top = 4, .left = 4, .bottom = 4, .right = 4 }}}) {
+        CLAY({ .id = CLAY_ID("InterpretedPanelSpace"), .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(1)}, .padding = { .top = 4, .left = 4, .bottom = 4, .right = 4 }}}) {
             Clay_LayoutConfig layout = {
                 .layoutDirection = CLAY_LEFT_TO_RIGHT,
                 .childGap = 4,
             };
             // Draw the contents of the file
-            char* data = (char*)appState.binaryContentBuffer;
-            for (size_t i = 0; i < appState.currentFile.size; i++) {
-                CLAY({ .id = CLAY_IDI("Interpreted", i), .layout = layout }) {
-                    Buttons::ButtonArgs button;
-                    button.fgHoverColor = ColorUtils::ACCENT_PURPLE();
-                    button.bgHoverColor = ColorUtils::SOFT_BLACK();
-                    button.fontSize = 24;
-                    button.sizing = {
-                        .height = CLAY_SIZING_FIXED(48),
-                        .width = CLAY_SIZING_FIXED(48)
-                    };
-                    Buttons::RawButton(StrToClayString(data + i, 1), button);
-                }
-
-            }
+            DrawCharsLineByLine(appState);
         }
 
     }
