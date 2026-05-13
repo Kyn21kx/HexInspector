@@ -70,5 +70,37 @@ case "$OS" in
         ;;
 esac
 
+echo "==> Generating compile_commands.json"
+PROJECT_ROOT=$(pwd)
+CDB="$PROJECT_ROOT/compile_commands.json"
+{
+    printf '[\n'
+    first=true
+
+    for file in "${C_FILES[@]}"; do
+        $first || printf ',\n'
+        first=false
+        printf '  {\n    "directory": "%s",\n    "file": "%s",\n    "arguments": ["clang", "-c", "%s"' \
+            "$PROJECT_ROOT" "$SRC_DIR/$file" "$SRC_DIR/$file"
+        for flag in "${CFLAGS[@]}" "${INCLUDES[@]}"; do
+            printf ', "%s"' "$flag"
+        done
+        printf ']\n  }'
+    done
+
+    for file in "${CPP_FILES[@]}"; do
+        $first || printf ',\n'
+        first=false
+        printf '  {\n    "directory": "%s",\n    "file": "%s",\n    "arguments": ["clang++", "-c", "%s"' \
+            "$PROJECT_ROOT" "$SRC_DIR/$file" "$SRC_DIR/$file"
+        for flag in "${CPPFLAGS[@]}" "${INCLUDES[@]}"; do
+            printf ', "%s"' "$flag"
+        done
+        printf ']\n  }'
+    done
+
+    printf '\n]\n'
+} > "$CDB"
+
 echo "==> Done: $OUTPUT"
 echo "    Ship '$BUILD_DIR/$PROJECT' and '$BUILD_DIR/libraylib.550.dylib' together"
