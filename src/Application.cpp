@@ -39,20 +39,55 @@ void Application::HandleInput() {
     if (this->m_appState.currentFile.handle == 0) {
         return;
     }
-    if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
-        this->m_appState.selectedByteIdx--;
+
+    int64_t lowerLimit = 0;
+    int64_t lowerLimitRange = 0;
+
+    if (this->m_appState.selectedByteIdx <= -1) {
+        lowerLimit = -1;
     }
-    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) {
-        this->m_appState.selectedByteIdx++;
-    }
-    if (IsKeyPressed(KEY_UP) || IsKeyPressedRepeat(KEY_UP)) {
-        this->m_appState.selectedByteIdx -= this->m_appState.buttonsPerCurrentWidth;
-    }
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
-        this->m_appState.selectedByteIdx += this->m_appState.buttonsPerCurrentWidth;
+    if (this->m_appState.selectedByteRangeEnd <= -1) {
+        lowerLimitRange = -1;
     }
 
-    this->m_appState.selectedByteIdx = std::clamp<int64_t>(this->m_appState.selectedByteIdx, -1, this->m_appState.currentFile.size);
+    int64_t originalByteIdx = this->m_appState.selectedByteIdx;
+
+    int64_t isMultiSelectFactor = static_cast<int64_t>(IsKeyDown(KEY_LEFT_SHIFT));
+    if (isMultiSelectFactor && this->m_appState.selectedByteRangeEnd <= -1) {
+        this->m_appState.selectedByteRangeEnd = this->m_appState.selectedByteIdx;
+    }
+
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
+        this->m_appState.selectedByteIdx -= (1 * (1 - isMultiSelectFactor));
+        this->m_appState.selectedByteRangeEnd -= (1 * (isMultiSelectFactor));
+
+    }
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) {
+        this->m_appState.selectedByteIdx += (1 * (1 - isMultiSelectFactor));
+        this->m_appState.selectedByteRangeEnd += (1 * isMultiSelectFactor);
+    }
+    if (IsKeyPressed(KEY_UP) || IsKeyPressedRepeat(KEY_UP)) {
+        this->m_appState.selectedByteIdx -= this->m_appState.buttonsPerCurrentWidth * (1 - isMultiSelectFactor);
+        this->m_appState.selectedByteRangeEnd -= this->m_appState.buttonsPerCurrentWidth * (isMultiSelectFactor);
+    }
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
+        this->m_appState.selectedByteIdx += this->m_appState.buttonsPerCurrentWidth * (1 - isMultiSelectFactor);
+        this->m_appState.selectedByteRangeEnd += this->m_appState.buttonsPerCurrentWidth * (isMultiSelectFactor);
+    }
+
+
+    // Handle deselecting if we stopped pressing shift and kept moving
+    if (this->m_appState.selectedByteRangeEnd != -1 && this->m_appState.selectedByteIdx != originalByteIdx && !isMultiSelectFactor) {
+        // Switch our selected index for the last byte we actually selected on that direction
+        this->m_appState.selectedByteIdx = this->m_appState.selectedByteRangeEnd;
+        this->m_appState.selectedByteRangeEnd = -1;
+    }
+    else {
+        this->m_appState.selectedByteRangeEnd = std::clamp<int64_t>(this->m_appState.selectedByteRangeEnd, lowerLimitRange, this->m_appState.currentFile.size - 1);
+    }
+
+    this->m_appState.selectedByteIdx = std::clamp<int64_t>(this->m_appState.selectedByteIdx, lowerLimit, this->m_appState.currentFile.size - 1);
+    
 }
 
 void Application::Init() {
@@ -174,11 +209,19 @@ void FileDialogOpen(Clay_ElementId elementId, Clay_PointerData pointerData, intp
     std::printf("Open file dialog!\n");
 }
 
+bool IsIndexInSelectionRange(size_t idx, int64_t rangeA, int64_t rangeB) {
+    if (rangeB <= -1) {
+        return idx == rangeA;
+    }
+    bool couldLowerA = idx <= rangeA && idx >= rangeB;
+    bool couldLowerB = idx <= rangeB && idx >= rangeA;
+    return couldLowerA || couldLowerB;
+}
 
 void DrawButtonForView(size_t idx, const char* text, size_t length, AppState* state) {
     Clay_String str = StrToClayString(text, length);
     Buttons::ButtonArgs button;
-    if (state->selectedByteIdx == idx) {
+    if (IsIndexInSelectionRange(idx, state->selectedByteIdx, state->selectedByteRangeEnd)) {
         // Override colors because we are selected
         button.fgHoverColor = ColorUtils::ACCENT_PURPLE();
         button.fgIdleColor = ColorUtils::ACCENT_PURPLE();
@@ -199,6 +242,8 @@ void DrawButtonForView(size_t idx, const char* text, size_t length, AppState* st
     if (Buttons::RawButton(str, button)) {
         state->hoverByteIdx = idx;
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            // Disable multi select if needed
+            if (!IsKeyPressed(KEY_LEFT_SHIFT)) state->selectedByteRangeEnd = -1;
             state->selectedByteIdx = idx;
         }
     }
@@ -380,9 +425,19 @@ void Application::BuildUI(AppState* appState) {
         }) {
             constexpr size_t STR_MAX_LENGTH = 32;
             char* offsetStr = smallStringArena.PushManyAndZeroOut<char>(STR_MAX_LENGTH);
-            snprintf(offsetStr, STR_MAX_LENGTH, "Offset (Hover position): %zu", appState->hoverByteIdx);
+            snprintf(offsetStr, STR_MAX_LENGTH, "Offset (Hover position): %lld", appState->hoverByteIdx);
             CLAY_TEXT(StrToClayString(offsetStr, STR_MAX_LENGTH),
                 CLAY_TEXT_CONFIG({ .fontSize = 14, .textColor = ColorUtils::WHITE_() }));
+
+            char* selectedStr = smallStringArena.PushManyAndZeroOut<char>(STR_MAX_LENGTH);
+            // This is a bit awful lol
+            int64_t byteDistance = abs(appState->selectedByteIdx - appState->selectedByteRangeEnd) + 1;
+
+            if (appState->selectedByteIdx >= 0 && appState->selectedByteRangeEnd != -1) {
+                snprintf(selectedStr, STR_MAX_LENGTH, "Selected bytes: %lld", byteDistance);
+                CLAY_TEXT(StrToClayString(selectedStr, STR_MAX_LENGTH),
+                    CLAY_TEXT_CONFIG({ .fontSize = 14, .textColor = ColorUtils::WHITE_() }));
+            }
 
             // CLAY_TEXT(CLAY_STRING("Size: --"),
             //     CLAY_TEXT_CONFIG({ .fontSize = 13, .textColor = ColorUtils::WHITE_() }));
