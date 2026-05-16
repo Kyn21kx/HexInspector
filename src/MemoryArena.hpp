@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cstring>
 
+class MemoryArena;
+using ArenaResizeFunction_t = void(*)(MemoryArena*, size_t);
+
 class MemoryArena {
 public:
 	
@@ -47,7 +50,6 @@ public:
 		uint8_t* res = &this->m_memory[this->m_position];
 		// TODO: optionally do memset to zero
 		std::memset(res, 0, size);
-		printf("Arena pos: %zu\n", positionAligned + size);
 		return res;
 	}
 
@@ -115,6 +117,7 @@ private:
 	std::atomic<size_t> m_capacity = 0;
 	std::atomic<size_t> m_position = 0;
 	uint8_t* m_memory = nullptr;
+	ArenaResizeFunction_t m_resizeFn;
 
 };
 

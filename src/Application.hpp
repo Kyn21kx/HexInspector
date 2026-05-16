@@ -4,6 +4,8 @@
 #include "raylib.h"
 #include "clay.h"
 
+struct AppState;
+
 class Application {
 public:
 
@@ -13,9 +15,12 @@ public:
     void Draw();
     void Dispose();
 
-    void BuildUI();
+    void BuildUI(AppState* appState);
 
 private:
+
+    void HandleInput();
+    
     Font fonts[10];
     bool initialized = false;
     AppState m_appState;
