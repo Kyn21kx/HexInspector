@@ -24,6 +24,12 @@ constexpr Clay_Color PANEL_COLOR = ColorUtils::PANEL_BG();
 constexpr Clay_Color BACKGROUND_COLOR = ColorUtils::BORDER();
 
 constexpr size_t SMALL_STR_ARENA_SIZE = 1024 * 10;
+constexpr float MAIN_PANELS_PCT = 0.4f;
+constexpr float SIDE_PANELS_PCT = 0.1f;
+constexpr float BYTE_BUTTON_WIDHT = 32.0f;
+constexpr float BYTE_TEXT_SIZE = BYTE_BUTTON_WIDHT * 0.5f;
+
+static_assert((MAIN_PANELS_PCT + SIDE_PANELS_PCT) * 2 == 1.0f, "Panels should amount to 100% of view space on width");
 MemoryArena smallStringArena;
 
 void Application::Run() {
@@ -52,7 +58,7 @@ void Application::HandleInput() {
 
     int64_t originalByteIdx = this->m_appState.selectedByteIdx;
 
-    int64_t isMultiSelectFactor = static_cast<int64_t>(IsKeyDown(KEY_LEFT_SHIFT));
+    int64_t isMultiSelectFactor = static_cast<int64_t>(IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
     if (isMultiSelectFactor && this->m_appState.selectedByteRangeEnd <= -1) {
         this->m_appState.selectedByteRangeEnd = this->m_appState.selectedByteIdx;
     }
@@ -73,6 +79,12 @@ void Application::HandleInput() {
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
         this->m_appState.selectedByteIdx += this->m_appState.buttonsPerCurrentWidth * (1 - isMultiSelectFactor);
         this->m_appState.selectedByteRangeEnd += this->m_appState.buttonsPerCurrentWidth * (isMultiSelectFactor);
+    }
+
+    if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_A)) {
+        this->m_appState.selectedByteIdx = 0;
+        this->m_appState.selectedByteRangeEnd = this->m_appState.currentFile.size - 1;
+        isMultiSelectFactor = 1;
     }
 
 
@@ -234,10 +246,10 @@ void DrawButtonForView(size_t idx, const char* text, size_t length, AppState* st
         button.bgHoverColor = ColorUtils::SOFT_BLACK();
     }
     button.active = state->hoverByteIdx == idx;
-    button.fontSize = 24;
+    button.fontSize = BYTE_TEXT_SIZE;
     button.sizing = {
-        .height = CLAY_SIZING_FIXED(48),
-        .width = CLAY_SIZING_FIXED(48)
+        .height = CLAY_SIZING_FIXED(BYTE_BUTTON_WIDHT),
+        .width = CLAY_SIZING_FIXED(BYTE_BUTTON_WIDHT)
     };
     if (Buttons::RawButton(str, button)) {
         state->hoverByteIdx = idx;
@@ -271,10 +283,9 @@ void DrawByte(size_t idx, uint8_t byte, AppState* state) {
 void DrawBytesLineByLine(AppState* appState) {
     Clay_ElementData panelData = Clay_GetElementData(CLAY_ID("LeftPanel"));
     float availableWidth = panelData.boundingBox.width;
-    constexpr float BUTTON_WIDTH = 48;
 
     // Calculate how many buttons per line
-    int32_t buttonsPerWidth = static_cast<int32_t>(availableWidth / BUTTON_WIDTH);
+    int32_t buttonsPerWidth = static_cast<int32_t>((availableWidth / BYTE_BUTTON_WIDHT) - 1);
     appState->buttonsPerCurrentWidth = buttonsPerWidth;
 
     size_t buttonsToWrite = appState->currentFile.size;
@@ -302,10 +313,9 @@ void DrawBytesLineByLine(AppState* appState) {
 void DrawCharsLineByLine(AppState* appState) {
     Clay_ElementData panelData = Clay_GetElementData(CLAY_ID("LeftPanel"));
     float availableWidth = panelData.boundingBox.width;
-    constexpr float BUTTON_WIDTH = 48;
 
     // Calculate how many buttons per line
-    int32_t buttonsPerWidth = static_cast<int32_t>(availableWidth / BUTTON_WIDTH);
+    int32_t buttonsPerWidth = static_cast<int32_t>(availableWidth / BYTE_BUTTON_WIDHT);
 
     size_t buttonsToWrite = appState->currentFile.size;
 
@@ -332,7 +342,7 @@ void DrawCharsLineByLine(AppState* appState) {
 
 void DrawHexView(AppState* appState) {
   Clay_TextElementConfig panelTitleTextConfig = TextUtils::Default(24);
-  float percentageUse = appState->currentFile.handle == 0 ? 1 : 0.5;
+  float percentageUse = appState->currentFile.handle == 0 ? 1 : MAIN_PANELS_PCT;
   CLAY({
       .id = CLAY_ID("LeftPanel"),
       .layout =
@@ -371,7 +381,7 @@ void DrawInterpretedView(AppState* appState) {
         .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             // .padding = { .left = 8, .right = 8, .top = 8, .bottom = 8 },
-            .sizing = { .width = CLAY_SIZING_FIXED(GetScreenWidth() * 0.5f), .height = CLAY_SIZING_GROW()},
+            .sizing = { .width = CLAY_SIZING_FIXED(GetScreenWidth() * MAIN_PANELS_PCT), .height = CLAY_SIZING_GROW()},
         },
         .backgroundColor = PANEL_COLOR,
         .border = { .color = BACKGROUND_COLOR, .width = CLAY_BORDER_OUTSIDE(1) },
@@ -392,6 +402,27 @@ void DrawInterpretedView(AppState* appState) {
     }
 }
 
+void DrawFileDataView(AppState* appState) {
+    if (appState->currentFile.handle == 0) {
+        // Skip drawing if no file is present, we let the left panel handle the prompt to the user
+        return;
+    }
+
+    Clay_TextElementConfig titleConfig = TextUtils::Default(24);
+    Clay_LayoutConfig panelLayout = {
+        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        .childGap = 4,
+        .sizing = { .height = CLAY_SIZING_PERCENT(1), .width = CLAY_SIZING_FIXED(GetScreenWidth() * SIDE_PANELS_PCT) },
+    };
+    CLAY({
+        .id = CLAY_ID("FileDataView"),
+        .layout = panelLayout,
+        .backgroundColor = PANEL_COLOR,
+    }) {
+        CLAY_TEXT(CLAY_STRING("File View"), CLAY_TEXT_CONFIG(titleConfig));
+    }
+}
+
 void Application::BuildUI(AppState* appState) {
     Clay_TextElementConfig titleConfig = TextUtils::Default(24);
     CLAY({
@@ -407,6 +438,8 @@ void Application::BuildUI(AppState* appState) {
                 .sizing = { .width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW() },
             },
         }) {
+            DrawFileDataView(&this->m_appState);
+
             DrawHexView(&this->m_appState);
 
             DrawInterpretedView(&this->m_appState);
